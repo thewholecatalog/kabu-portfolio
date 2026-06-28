@@ -124,7 +124,8 @@ async function search(q) {
         "&quotesCount=10&newsCount=0&enableFuzzyQuery=false";
       const d = await (await fetch(u, { headers: { "User-Agent": UA } })).json();
       for (const x of d.quotes || []) {
-        if (x.quoteType === "EQUITY" && x.symbol)
+        // 個別株(EQUITY)に加えてETFも対象（ETFは価格/PER/利回りのみ取得可、他は—）
+        if ((x.quoteType === "EQUITY" || x.quoteType === "ETF") && x.symbol)
           add(x.symbol, x.longname || x.shortname, x.exchDisp || x.exchange);
       }
     } catch (_) {}
