@@ -41,9 +41,13 @@ async function doSearch() {
   if (!q) return;
   setStatus("検索中…");
   try {
-    const { quotes } = await apiGet("/api/search?q=" + encodeURIComponent(q));
+    const res = await apiGet("/api/search?q=" + encodeURIComponent(q));
+    const quotes = res.quotes || [];
     renderSearchResults(quotes);
-    setStatus(quotes.length ? "" : "該当なし");
+    if (quotes.length) setStatus("");
+    else if (res.hint === "code-or-romaji")
+      setStatus("日本語社名は検索できません。コード番号（例: 7203 / 0700）かローマ字（例: toyota）で検索してください。");
+    else setStatus("該当なし");
   } catch (e) {
     handleErr(e);
   }

@@ -98,22 +98,66 @@ async function yfetch(buildUrl) {
 }
 
 // ---- /api/search ----
+// Yahoo検索はASCIIのみ対応（日本語クエリは 400 Invalid Search Query）。
+// そのため数字コードは .T(日本)/.HK(香港) 候補を chart で実在確認して補完する。
 async function search(q) {
-  if (!q.trim()) return { quotes: [] };
-  const u =
-    "https://query2.finance.yahoo.com/v1/finance/search?q=" +
-    encodeURIComponent(q) +
-    "&quotesCount=10&newsCount=0&enableFuzzyQuery=false";
-  const r = await fetch(u, { headers: { "User-Agent": UA } });
-  const d = await r.json();
-  const quotes = (d.quotes || [])
-    .filter((x) => x.quoteType === "EQUITY" && x.symbol)
-    .map((x) => ({
-      symbol: x.symbol,
-      name: x.longname || x.shortname || x.symbol,
-      exchange: x.exchDisp || x.exchange || "",
-    }));
-  return { quotes };
+  q = (q || "").trim();
+  if (!q) return { quotes: [] };
+
+  const out = [];
+  const seen = new Set();
+  const add = (sym, name, exch) => {
+    if (!sym || seen.has(sym)) return;
+    seen.add(sym);
+    out.push({ symbol: sym, name: name || sym, exchange: exch || "" });
+  };
+
+  const isAscii = /^[\x20-\x7E]+$/.test(q);
+  const isCode = /^\d{1,5}$/.test(q);
+
+  // 1) Yahoo検索（ASCII: 英語名 / ローマ字 / ティッカー）
+  if (isAscii) {
+    try {
+      const u =
+        "https://query2.finance.yahoo.com/v1/finance/search?q=" +
+        encodeURIComponent(q) +
+        "&quotesCount=10&newsCount=0&enableFuzzyQuery=false";
+      const d = await (await fetch(u, { headers: { "User-Agent": UA } })).json();
+      for (const x of d.quotes || []) {
+        if (x.quoteType === "EQUITY" && x.symbol)
+          add(x.symbol, x.longname || x.shortname, x.exchDisp || x.exchange);
+      }
+    } catch (_) {}
+  }
+
+  // 2) 数字コード → 日本(.T)/香港(.HK) 候補を chart で実在確認
+  if (isCode) {
+    const cands = [q + ".T", q.padStart(4, "0") + ".HK"];
+    if (q.length !== 4) cands.push(q + ".HK");
+    const metas = await Promise.all(cands.map(probeChart));
+    for (const m of metas) {
+      if (m) add(m.symbol, m.longName || m.shortName, m.fullExchangeName || m.exchangeName);
+    }
+  }
+
+  // 日本語社名など、検索手段が無いケースをフロントに伝える
+  return { quotes: out, hint: out.length === 0 && !isAscii ? "code-or-romaji" : null };
+}
+
+// chart で銘柄の実在確認（認証不要・社名も meta から取れる）
+async function probeChart(symbol) {
+  try {
+    const u =
+      "https://query1.finance.yahoo.com/v8/finance/chart/" +
+      encodeURIComponent(symbol) +
+      "?interval=1d&range=1d";
+    const r = await fetch(u, { headers: { "User-Agent": UA } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.chart?.result?.[0]?.meta || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 // ---- /api/quote ----
