@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>株ポートフォリオ</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>📈 株ポートフォリオ</h1>
+    <div class="top-actions">
+      <button id="refreshBtn" title="最新化">⟳</button>
+      <button id="settingsBtn" title="設定">⚙️</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 追加フォーム -->
+    <section class="add-box">
+      <div class="add-row">
+        <input id="searchInput" type="text" placeholder="企業名 または ティッカー（例: トヨタ / AAPL / 0700.HK）" autocomplete="off" />
+        <button id="searchBtn">検索</button>
+      </div>
+      <ul id="searchResults" class="search-results hidden"></ul>
+    </section>
+
+    <p id="status" class="status"></p>
+
+    <!-- 一覧（PC: テーブル / スマホ: カード … CSSで切替） -->
+    <section id="portfolio" class="portfolio"></section>
+
+    <p id="empty" class="empty hidden">
+      まだ銘柄がありません。上の検索ボックスから追加してください。
+    </p>
+  </main>
+
+  <!-- 設定モーダル -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card">
+      <h2>設定</h2>
+      <label>プロキシURL（Cloudflare Worker）</label>
+      <input id="proxyInput" type="text" placeholder="https://xxxx.workers.dev" />
+      <p class="hint">
+        Worker のURLを入力してください。末尾の <code>/api/...</code> は不要です。
+      </p>
+      <div class="modal-actions">
+        <button id="saveSettings" class="primary">保存</button>
+        <button id="closeSettings">閉じる</button>
+      </div>
+      <p class="version" id="versionLabel"></p>
+    </div>
+  </div>
+
+  <!-- 手動上書きモーダル -->
+  <div id="editModal" class="modal hidden">
+    <div class="modal-card">
+      <h2 id="editTitle">手動入力</h2>
+      <p class="hint">会社公表の予想など、自動取得できない項目を上書きできます。入力した値が優先表示されます（空欄なら自動値）。</p>
+      <label>会社予想 売上</label>
+      <input id="ovRevenue" type="number" inputmode="decimal" placeholder="自動値を使う場合は空欄" />
+      <label>会社予想 税後利益</label>
+      <input id="ovNetIncome" type="number" inputmode="decimal" />
+      <label>予想ROE（%）</label>
+      <input id="ovForwardROE" type="number" inputmode="decimal" />
+      <label>次回決算発表日</label>
+      <input id="ovNextEarnings" type="date" />
+      <label>メモ</label>
+      <input id="ovMemo" type="text" placeholder="任意" />
+      <div class="modal-actions">
+        <button id="saveEdit" class="primary">保存</button>
+        <button id="closeEdit">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
