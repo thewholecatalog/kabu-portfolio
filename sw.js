@@ -1,7 +1,7 @@
 /* Service Worker — network-first（更新が確実に反映される方式）
  * 英会話アプリの知見を流用: ネット優先、失敗時のみキャッシュ。
  */
-const CACHE = "kabu-portfolio-v1.0.0";
+const CACHE = "kabu-portfolio-v1.1.0";
 const ASSETS = [
   "./",
   "./index.html",

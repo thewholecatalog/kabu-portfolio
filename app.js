@@ -4,23 +4,34 @@
  * - プロキシ(Cloudflare Worker)経由で Yahoo Finance を取得
  */
 
-const APP_VERSION = "v1.0.0";
+const APP_VERSION = "v1.1.0";
 const LS_KEY = "kabu.portfolio.v1"; // [{symbol, override:{...}}]
 const LS_PROXY = "kabu.proxyUrl";
 const LS_CACHE = "kabu.cache.v1"; // symbol -> normalized quote（最後の取得結果）
+const LS_SYNC = "kabu.syncCode";   // PC/スマホ共有の合言葉
+const LS_META = "kabu.updatedAt";  // ローカルの最終更新時刻（同期の新旧判定用）
 
 const $ = (id) => document.getElementById(id);
 
 let portfolio = load(LS_KEY, []);
 let cache = load(LS_CACHE, {});
 let proxyUrl = localStorage.getItem(LS_PROXY) || "";
+let syncCode = localStorage.getItem(LS_SYNC) || "";
+let localUpdatedAt = Number(localStorage.getItem(LS_META) || 0);
 let editingSymbol = null;
 
 function load(key, def) {
   try { return JSON.parse(localStorage.getItem(key)) ?? def; } catch { return def; }
 }
 function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
-function savePortfolio() { save(LS_KEY, portfolio); }
+
+// 銘柄リストの保存＝更新時刻を進めてクラウドへ反映（同期コード設定時）
+function savePortfolio() {
+  localUpdatedAt = Date.now();
+  localStorage.setItem(LS_META, String(localUpdatedAt));
+  save(LS_KEY, portfolio);
+  pushState();
+}
 
 // ---- プロキシ呼び出し ----
 function api(path) {
@@ -33,6 +44,45 @@ async function apiGet(path) {
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data;
+}
+async function apiPut(path, bodyObj) {
+  const res = await fetch(api(path), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(bodyObj),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+// ---- クラウド同期（Cloudflare KV）----
+// 同期コード（合言葉）をキーに、銘柄リストをクラウドへ保存／取得。
+// 新旧は updatedAt で判定（last-write-wins）。cache(株価)は同期せず起動時に再取得。
+async function pushState() {
+  if (!syncCode || !proxyUrl) return;
+  try {
+    await apiPut("/api/state?key=" + encodeURIComponent(syncCode),
+      { portfolio, updatedAt: localUpdatedAt });
+  } catch (_) { /* オフライン等は無視 */ }
+}
+async function pullState() {
+  if (!syncCode || !proxyUrl) return;
+  try {
+    const remote = await apiGet("/api/state?key=" + encodeURIComponent(syncCode));
+    const remoteAt = remote && remote.updatedAt ? remote.updatedAt : 0;
+    if (Array.isArray(remote && remote.portfolio) && remoteAt > localUpdatedAt) {
+      // クラウドが新しい → 取り込む
+      portfolio = remote.portfolio;
+      localUpdatedAt = remoteAt;
+      save(LS_KEY, portfolio);
+      localStorage.setItem(LS_META, String(localUpdatedAt));
+      render();
+    } else if (localUpdatedAt > remoteAt && portfolio.length) {
+      // ローカルが新しい → クラウドへ反映
+      await pushState();
+    }
+  } catch (_) { /* 失敗時はローカルのまま */ }
 }
 
 // ---- 検索 → 追加 ----
@@ -225,14 +275,21 @@ function saveEdit() {
 // ---- 設定 ----
 function openSettings() {
   $("proxyInput").value = proxyUrl;
+  $("syncInput").value = syncCode;
   $("versionLabel").textContent = APP_VERSION;
   $("settingsModal").classList.remove("hidden");
 }
 function saveSettings() {
   proxyUrl = $("proxyInput").value.trim();
   localStorage.setItem(LS_PROXY, proxyUrl);
+  const newSync = $("syncInput").value.trim();
+  const syncChanged = newSync !== syncCode;
+  syncCode = newSync;
+  localStorage.setItem(LS_SYNC, syncCode);
   $("settingsModal").classList.add("hidden");
-  refreshAll();
+  // 同期コードを設定/変更した直後はクラウドと突き合わせてから更新
+  if (syncChanged && syncCode) pullState().then(refreshAll);
+  else refreshAll();
 }
 
 // ---- フォーマッタ ----
@@ -282,7 +339,7 @@ $("closeEdit").onclick = () => $("editModal").classList.add("hidden");
 // ---- 起動 ----
 render();
 if (!proxyUrl) openSettings();
-else refreshAll();
+else pullState().then(refreshAll);
 
 // Service Worker 登録
 if ("serviceWorker" in navigator) {

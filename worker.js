@@ -23,12 +23,12 @@ const CRUMB_TTL = 1000 * 60 * 30; // 30分
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: CORS });
     }
@@ -40,8 +40,18 @@ export default {
       if (url.pathname === "/api/quote") {
         return json(await quote(url.searchParams.get("symbol") || ""));
       }
+      // 銘柄リストのクラウド同期（要 KV バインディング: PORTFOLIO）
+      if (url.pathname === "/api/state") {
+        const key = url.searchParams.get("key") || "";
+        if (request.method === "PUT")
+          return json(await putState(env, key, await request.text()));
+        return json(await getState(env, key));
+      }
       if (url.pathname === "/" || url.pathname === "/api") {
-        return json({ ok: true, endpoints: ["/api/search?q=", "/api/quote?symbol="] });
+        return json({
+          ok: true,
+          endpoints: ["/api/search?q=", "/api/quote?symbol=", "/api/state?key="],
+        });
       }
       return json({ error: "not found" }, 404);
     } catch (e) {
@@ -49,6 +59,29 @@ export default {
     }
   },
 };
+
+// ---- /api/state （Cloudflare KV） ----
+function checkKv(env, key) {
+  if (!env || !env.PORTFOLIO)
+    throw new Error("KV未設定: WorkerにKV名前空間(PORTFOLIO)をバインドしてください");
+  if (!key || key.length < 4) throw new Error("同期コードは4文字以上にしてください");
+}
+async function getState(env, key) {
+  checkKv(env, key);
+  const v = await env.PORTFOLIO.get("state:" + key);
+  return v ? JSON.parse(v) : { portfolio: [], updatedAt: 0 };
+}
+async function putState(env, key, body) {
+  checkKv(env, key);
+  let data;
+  try { data = JSON.parse(body); } catch (_) { throw new Error("不正なJSON"); }
+  const payload = {
+    portfolio: Array.isArray(data.portfolio) ? data.portfolio : [],
+    updatedAt: data.updatedAt || Date.now(),
+  };
+  await env.PORTFOLIO.put("state:" + key, JSON.stringify(payload));
+  return { ok: true, updatedAt: payload.updatedAt };
+}
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {

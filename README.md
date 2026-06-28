@@ -58,6 +58,22 @@
 動作確認：ブラウザで `https://～.workers.dev/api/quote?symbol=AAPL` を開いてJSONが
 返ればOK。
 
+### 1.5 （任意）PC・スマホで銘柄リストを共有する — KVを有効化
+
+複数端末で同じ銘柄リストを使いたい場合のみ。不要なら飛ばしてOK（その場合は端末ごとに独立）。
+
+1. Cloudflare ダッシュボード → **Storage & Databases → KV** → **Create a namespace**
+   （名前は任意、例 `kabu-portfolio`）
+2. Workers & Pages → 作成した Worker → **Settings → Bindings → Add → KV namespace**
+   - **Variable name** に必ず `PORTFOLIO` と入力
+   - 上で作った KV namespace を選択 → 保存
+3. アプリの ⚙️ 設定で **同期コード（合言葉）** を入力（例 `kabu-7f3a9b2c`、4文字以上）。
+   PC・スマホ**両方に同じコード**を入れると銘柄リストが共有されます。
+
+> 同期されるのは銘柄リストと手動入力のみ（株価は各端末で起動時に再取得）。
+> 新旧は更新時刻で判定（後から保存した方が優先）。同期コードを知る人は閲覧・編集できるため、
+> 推測されにくい文字列にしてください。
+
 ### 2. アプリ（フロント）を用意する
 
 #### 方法A：GitHub Pages（推奨・どこからでも開ける）

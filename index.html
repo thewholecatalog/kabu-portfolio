@@ -48,6 +48,12 @@
       <p class="hint">
         Worker のURLを入力してください。末尾の <code>/api/...</code> は不要です。
       </p>
+      <label>同期コード（PC・スマホ共有の合言葉）</label>
+      <input id="syncInput" type="text" placeholder="例: kabu-7f3a9b2c（空欄なら同期しない）" autocomplete="off" />
+      <p class="hint">
+        両方の端末に<b>同じコード</b>を入れると銘柄リストが共有されます。
+        他人に推測されにくい文字列にしてください（このコードを知る人は閲覧・編集できます）。
+      </p>
       <div class="modal-actions">
         <button id="saveSettings" class="primary">保存</button>
         <button id="closeSettings">閉じる</button>
